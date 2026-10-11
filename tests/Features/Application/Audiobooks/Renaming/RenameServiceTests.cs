@@ -1275,7 +1275,8 @@ namespace Listenarr.Tests.Features.Application.Audiobooks.Renaming
 
             Assert.True(result.Success);
             Assert.True(File.Exists(targetPath));
-            Assert.True(Directory.Exists(sourceFolder));
+            // With companion moving (#1035) the emptied source folder is removed after the per-file organize.
+            Assert.False(Directory.Exists(sourceFolder));
             Assert.NotNull(Assert.Single(result.RenamedFiles).OperationId);
         }
 
