@@ -302,49 +302,10 @@ public sealed partial class VerifiedFileRenameTransactionCoordinator
                     var quarantine = sourceEntry.TryMoveToNoReplace(
                         sourceParent,
                         retirementName);
-                    if (!quarantine.Published
-                        && OperatingSystem.IsLinux()
-                        && quarantine.NativeErrorCode is 22 or 38 or 95)
-                    {
-                        // Local patch: FUSE mounts such as rclone reject RENAME_NOREPLACE, so the source cannot
-                        // be quarantined first. Re-verify both ends and delete the source in place instead of
-                        // retaining a full duplicate after every organize.
-                        await owner.AdvanceAsync(
-                            journal.OperationId,
-                            VerifiedFileRenameState.SourceQuarantined,
-                            error: null,
-                            CancellationToken.None);
-                        if (!await TargetStillMatchesAsync(cancellationToken)
-                            || !await SourceStillMatchesAsync(cancellationToken))
-                        {
-                            await owner.MarkSourceRetainedAsync(
-                                journal.OperationId,
-                                "Owner metadata was committed, but the source or target changed before in-place retirement. The old source was retained.",
-                                CancellationToken.None);
-                            return VerifiedFileRenameRetirementOutcome.SourceRetained;
-                        }
-
-                        sourceEntry.Delete(immediateWindows: true);
-                        sourceParent.FlushDirectoryEntry();
-                        await owner.AdvanceAsync(
-                            journal.OperationId,
-                            VerifiedFileRenameState.SourceDeleted,
-                            error: null,
-                            CancellationToken.None);
-                        await owner.AdvanceAsync(
-                            journal.OperationId,
-                            VerifiedFileRenameState.Completed,
-                            error: null,
-                            CancellationToken.None);
-                        return VerifiedFileRenameRetirementOutcome.Completed;
-                    }
                     if (!quarantine.Published)
                     {
-                        await owner.MarkSourceRetainedAsync(
-                            journal.OperationId,
-                            "Owner metadata was committed, but the source could not enter the operation-owned retirement namespace without replacement. The old source was retained.",
-                            CancellationToken.None);
-                        return VerifiedFileRenameRetirementOutcome.SourceRetained;
+                        return await owner.HandleUnpublishedQuarantineAsync(quarantine, journal.OperationId, sourceParent,
+                            sourceEntry, TargetStillMatchesAsync, SourceStillMatchesAsync, cancellationToken);
                     }
                     sourceParent.FlushDirectoryEntry();
                     await owner.AdvanceAsync(
