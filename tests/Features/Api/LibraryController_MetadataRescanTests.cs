@@ -329,6 +329,82 @@ namespace Listenarr.Tests.Features.Api
         }
 
         [Fact]
+        public async Task RescanMetadata_RemovesContributorRolesFromAuthors()
+        {
+            var metadataMock = new Mock<IAudiobookMetadataService>();
+            metadataMock
+                .Setup(m => m.GetMetadataAsync("B0DCC448X7", "fr", false))
+                .ReturnsAsync(new AudiobookMetadataEnvelope(
+                    new AudibleBookResponse
+                    {
+                        Asin = "B0DCC448X7",
+                        Title = "Primal Hunter 1",
+                        
+                        Authors = new List<AudibleAuthor> { new() { Name = "Zogarth" }, new() { Name = "Astrid Vallet - traducteur" } },
+                        Narrators = new List<AudibleNarrator> { new() { Name = "Raphaël Mathon" } },
+                        Language = "French",
+                        Isbn = "9782290000014"
+                    },
+                    "Audible",
+                    "https://api.audible.com"));
+
+            var factory = _factory.WithWebHostBuilder(builder =>
+            {
+                builder.ConfigureServices(services =>
+                {
+                    services.RemoveAll<IAudiobookMetadataService>();
+                    services.AddSingleton(metadataMock.Object);
+                    services.RemoveAll<IAsinLookupService>();
+                    services.AddSingleton(new Mock<IAsinLookupService>().Object);
+                });
+            });
+
+            int audiobookId;
+            using (var scope = factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ListenArrDbContext>();
+                var audiobook = new Audiobook
+                {
+                    Title = "Primal Hunter 1",
+                    Authors = new List<string> { "Zogarth", "Astrid Vallet - traducteur" },
+                    Monitored = true,
+                    Asin = "B0DCC448X7",
+                    ExternalIdentifiers = new List<AudiobookExternalIdentifier>
+                    {
+                        new()
+                        {
+                            Type = AudiobookExternalIdentifierType.Asin,
+                            ValueRaw = "B0DCC448X7",
+                            ValueNormalized = "B0DCC448X7",
+                            Region = "fr",
+                            IsPrimary = true,
+                            Source = AudiobookExternalIdentifierSource.Imported
+                        }
+                    }
+                };
+
+                db.Audiobooks.Add(audiobook);
+                await db.SaveChangesAsync();
+                audiobookId = audiobook.Id;
+            }
+
+            var response = await PostRescanAsync(factory.CreateClient(), audiobookId);
+            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+
+            using (var scope = factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ListenArrDbContext>();
+                var updated = await db.Audiobooks
+                    .Include(a => a.ExternalIdentifiers)
+                    .FirstAsync(a => a.Id == audiobookId);
+
+                Assert.Equal(new List<string> { "Zogarth", "Astrid Vallet" }, updated.Authors);
+            }
+
+            metadataMock.Verify(m => m.GetMetadataAsync("B0DCC448X7", "fr", false), Times.Once);
+        }
+
+        [Fact]
         public async Task RescanMetadata_PublishesImageOnlyAfterMetadataCommit()
         {
             const string asin = "B0IMGORDER";
