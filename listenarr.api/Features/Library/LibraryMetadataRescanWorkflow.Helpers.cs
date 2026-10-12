@@ -61,10 +61,11 @@ namespace Listenarr.Api.Features.Library
                     metadata.SeriesNumber);
             }
 
-            var authors = NormalizeMetadataStringList(
+            // Same role cleanup as ToAudiobook, so a rescan doesn't bring "X - translator" back.
+            var authors = NormalizeMetadataStringList(AuthorCredits.WithoutRoleSuffixes(
                 (metadata.Authors != null && metadata.Authors.Any())
                     ? metadata.Authors
-                    : (!string.IsNullOrWhiteSpace(metadata.Author) ? new List<string> { metadata.Author! } : null));
+                    : (!string.IsNullOrWhiteSpace(metadata.Author) ? new List<string> { metadata.Author! } : new List<string>())).ToList());
             if (authors.Count > 0) audiobook.Authors = authors;
 
             var narrators = NormalizeMetadataStringList(
