@@ -339,7 +339,7 @@ namespace Listenarr.Tests.Features.Api
                     {
                         Asin = "B0DCC448X7",
                         Title = "Primal Hunter 1",
-                        
+
                         Authors = new List<AudibleAuthor> { new() { Name = "Zogarth" }, new() { Name = "Astrid Vallet - traducteur" } },
                         Narrators = new List<AudibleNarrator> { new() { Name = "Raphaël Mathon" } },
                         Language = "French",
