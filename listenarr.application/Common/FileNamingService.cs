@@ -207,9 +207,7 @@ namespace Listenarr.Application.Common
 
             // Replace variables. If a variable is empty, emit a sentinel so we can clean up surrounding
             // punctuation and separators (for example: remove "{Series}/" when Series is empty).
-            // The sentinel must not contain any separator character handled by the cleanup below
-            // (an underscore-based sentinel was partly eaten when two empty variables were adjacent).
-            const string EmptySentinel = "\uE000EMPTYVAR\uE000";
+            const string EmptySentinel = "__EMPTY_VAR__";
             result = variableRegex.Replace(result, match =>
             {
                 var variableName = match.Groups[1].Value;
@@ -255,13 +253,10 @@ namespace Listenarr.Application.Common
                 return EmptySentinel;
             });
 
-            // Merge adjacent sentinels (e.g. "{SeriesNumber} {Series}" with both empty) into one
-            result = Regex.Replace(result, EmptySentinel + @"(?:\s*" + EmptySentinel + ")+", EmptySentinel);
-
-            // Cleanup: remove empty sentinel inside any brackets (e.g. "({Narrator})" with Narrator empty -> "")
+            // Cleanup: remove empty sentinel inside any brackets (e.g. "(__EMPTY_VAR__)" -> "")
             result = Regex.Replace(result, @"[\(\[\{]\s*" + EmptySentinel + @"\s*[\)\]\}]", string.Empty);
 
-            // Remove common separators adjacent to the sentinel (e.g. " - {Series}" or "{Series} - " with Series empty)
+            // Remove common separators adjacent to the sentinel (e.g. " - __EMPTY_VAR__" or "__EMPTY_VAR__ - ")
             result = Regex.Replace(result, @"\s*[-–—:_]\s*" + EmptySentinel, string.Empty);
             result = Regex.Replace(result, EmptySentinel + @"\s*[-–—:_]\s*", string.Empty);
 
