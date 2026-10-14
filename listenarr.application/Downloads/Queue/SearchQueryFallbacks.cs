@@ -49,7 +49,14 @@ namespace Listenarr.Application.Downloads.Queue
         {
             var query = primaryQuery;
             List<SearchResult> results = [];
-            foreach (var candidate in Expand(primaryQuery, title))
+            // The primary search always runs, as it did before the retries, even when the query is empty.
+            var candidates = Expand(primaryQuery, title);
+            if (candidates.Count == 0)
+            {
+                candidates = [primaryQuery];
+            }
+
+            foreach (var candidate in candidates)
             {
                 query = candidate;
                 var category = candidate == primaryQuery ? null : RetryCategory;

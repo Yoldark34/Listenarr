@@ -67,6 +67,22 @@ namespace Listenarr.Tests.Features.Application.Downloads.Queue
         }
 
         [Fact]
+        public async Task SearchAsync_StillRunsThePrimarySearchWhenTheQueryIsEmpty()
+        {
+            var search = new Mock<ISearchService>();
+            search.Setup(s => s.SearchAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<List<string>?>(),
+                    It.IsAny<SearchSortBy>(), It.IsAny<SearchSortDirection>(), true))
+                .ReturnsAsync([]);
+
+            var (query, results) = await SearchQueryFallbacks.SearchAsync(search.Object, string.Empty, null);
+
+            Assert.Equal(string.Empty, query);
+            Assert.Empty(results);
+            search.Verify(s => s.SearchAsync(string.Empty, null, It.IsAny<List<string>?>(),
+                It.IsAny<SearchSortBy>(), It.IsAny<SearchSortDirection>(), true), Times.Once);
+        }
+
+        [Fact]
         public async Task SearchAsync_RetriesWithTitleInAudiobookCategoryAndStopsAtFirstResults()
         {
             // An author credited as "Stephen King (alias Richard Bachman)" makes the combined query find nothing.
