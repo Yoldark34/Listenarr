@@ -39,7 +39,7 @@
             <select
               id="find-match-region"
               v-model="region"
-              class="form-select region-select"
+              class="form-input region-select"
               data-testid="find-match-region"
               @change="runSearch"
             >
@@ -206,7 +206,7 @@ function select(result: SearchResult) {
 
 .region-label {
   font-size: 0.8rem;
-  opacity: 0.8;
+  color: #888;
 }
 
 .region-select {
