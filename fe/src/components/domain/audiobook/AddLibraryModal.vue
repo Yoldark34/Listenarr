@@ -46,6 +46,21 @@
 
             <!-- Book Details -->
             <div class="book-details">
+              <div
+                v-if="metadataLookupFailed"
+                class="metadata-not-found"
+                role="alert"
+                data-testid="metadata-not-found"
+              >
+                <PhWarning :size="16" />
+                <p>
+                  <strong
+                    >No Audible record for this ASIN in the
+                    {{ metadataLookupRegions.map(regionLabel).join(' or ') }} catalogue.</strong
+                  >
+                  The book can't be added without it.
+                </p>
+              </div>
               <div v-if="!showMetadataEditor" class="detail-section detail-header">
                 <div>
                   <h3>{{ currentMetadata.title }}</h3>
@@ -437,7 +452,12 @@
       <button
         class="btn btn-primary"
         @click="addToLibrary"
-        :disabled="isAdding || metadataLoading || Boolean(destinationPathValidationError)"
+        :disabled="
+          isAdding ||
+          metadataLoading ||
+          Boolean(destinationPathValidationError) ||
+          metadataLookupFailed
+        "
       >
         <PhSpinner v-if="isAdding" class="ph-spin" />
         <PhPlus v-else />
@@ -485,7 +505,7 @@ import {
 import { formatDate } from '@/utils/searchResultFormatting'
 import { stripHtmlAndNormalize } from '@/utils/textUtils'
 import { usePathLengthCheck } from '@/composables/usePathLengthCheck'
-import { normalizeSearchRegion } from '@/utils/languageMapping'
+import { normalizeSearchRegion, searchRegionOptions } from '@/utils/languageMapping'
 
 interface Props {
   visible: boolean
@@ -861,6 +881,16 @@ const imageLoading = ref(false)
 const imageRetryCount = ref(0)
 const metadataLoading = ref(false)
 const metadataSource = ref<string | null>(null)
+// Set when neither the configured Audible catalogue nor the US one has a usable record for the ASIN
+// (request error such as a 404, or an empty product stub that has an ASIN but no title).
+const metadataLookupFailed = ref(false)
+const metadataLookupRegions = ref<string[]>([])
+// Catalogue tried when the configured one has no record for the ASIN
+const FALLBACK_REGION = 'us'
+
+function regionLabel(region: string): string {
+  return searchRegionOptions.find((o) => o.value === region)?.label ?? region
+}
 
 const imageSrc = computed(() => {
   // prefer resolvedImageUrl passed from parent
@@ -1035,6 +1065,45 @@ async function refreshPreviewFromMetadata(force = false, ownerGeneration = seedG
   }
 }
 
+type MetadataLookup = { found: boolean; enriched: AudibleBookMetadata | null; source?: string }
+
+// Fetch the Audible record for an ASIN in one region. found=false means that catalogue has nothing
+// usable for it; a response without any record keeps the previous behaviour (use the provided book).
+async function lookupMetadata(
+  asin: string,
+  region: string,
+  fallbackBook: AudibleBookMetadata,
+): Promise<MetadataLookup> {
+  let resp: unknown
+  try {
+    resp = await apiService.getAudibleMetadata<AudibleMetadataResponse | Partial<Audible>>(
+      asin,
+      region,
+    )
+  } catch (metaErr) {
+    logger.debug('Metadata fetch failed in AddLibraryModal:', metaErr)
+    return { found: false, enriched: null }
+  }
+  const payload = (resp && typeof resp === 'object' ? resp : {}) as
+    | AudibleMetadataResponse
+    | Partial<Audible>
+  const source =
+    'source' in payload && typeof payload.source === 'string' ? payload.source : undefined
+  const metadata =
+    'metadata' in payload && payload.metadata && typeof payload.metadata === 'object'
+      ? payload.metadata
+      : (payload as Partial<Audible>)
+  if (!metadata || typeof metadata !== 'object') return { found: true, enriched: null, source }
+  // Audible answers an ASIN it doesn't sell in that market with an empty stub: ASIN, no title
+  if (metadata.asin && !metadata.title) return { found: false, enriched: null }
+  const enrichedMeta = mapAudibleToAudible(metadata, source, fallbackBook)
+  // Sanitize seriesNumber to filter out the string "null"
+  if (enrichedMeta.seriesNumber === 'null') {
+    enrichedMeta.seriesNumber = undefined
+  }
+  return { found: true, enriched: enrichedMeta, source }
+}
+
 // helper to load profiles/settings and seed preview
 const seedPreview = async () => {
   const generation = ++seedGeneration
@@ -1052,6 +1121,8 @@ const seedPreview = async () => {
   const bookSnapshot = cloneMetadata(props.book)
   enriched.value = null
   metadataSource.value = null
+  metadataLookupFailed.value = false
+  metadataLookupRegions.value = []
   replaceEditableMetadata(bookSnapshot)
   showMetadataEditor.value = false
 
@@ -1082,39 +1153,31 @@ const seedPreview = async () => {
     // Attempt to fetch enriched metadata for the ASIN (if present) so preview/add use metadata sources
     if (bookSnapshot.asin) {
       metadataLoading.value = true
+      // The result's own region first, then the configured one (the API would default to 'us')
+      const region =
+        bookSnapshot.region ||
+        normalizeSearchRegion(configStore.applicationSettings?.defaultSearchRegion)
       try {
-        const resp = await apiService.getAudibleMetadata<
-          AudibleMetadataResponse | Partial<Audible>
-        >(
-          bookSnapshot.asin,
-          // The result's own region first, then the configured one (the API would default to 'us')
-          bookSnapshot.region ||
-            normalizeSearchRegion(configStore.applicationSettings?.defaultSearchRegion),
-        )
+        const tried = [region]
+        let result = await lookupMetadata(bookSnapshot.asin, region, bookSnapshot)
         if (!isCurrentSeed(generation)) return
-        const payload = (resp && typeof resp === 'object' ? resp : {}) as
-          | AudibleMetadataResponse
-          | Partial<Audible>
-        const source =
-          'source' in payload && typeof payload.source === 'string' ? payload.source : undefined
-        const metadata =
-          'metadata' in payload && payload.metadata && typeof payload.metadata === 'object'
-            ? payload.metadata
-            : (payload as Partial<Audible>)
-
-        if (metadata && typeof metadata === 'object') {
-          const enrichedMeta = mapAudibleToAudible(metadata, source, bookSnapshot)
-          // Sanitize seriesNumber to filter out the string "null"
-          if (enrichedMeta.seriesNumber === 'null') {
-            enrichedMeta.seriesNumber = undefined
+        if (!result.found && region !== FALLBACK_REGION) {
+          tried.push(FALLBACK_REGION)
+          result = await lookupMetadata(bookSnapshot.asin, FALLBACK_REGION, bookSnapshot)
+          if (!isCurrentSeed(generation)) return
+          if (result.enriched) {
+            // Keep the catalogue that actually has the book
+            result.enriched.region = result.enriched.region || FALLBACK_REGION
           }
-          enriched.value = enrichedMeta
-          metadataSource.value = source || null
         }
-      } catch (metaErr) {
-        if (!isCurrentSeed(generation)) return
-        // ignore metadata fetch errors - we'll fall back to provided book
-        logger.debug('Metadata fetch failed in AddLibraryModal:', metaErr)
+        if (!result.found) {
+          // Never add a book without its Audible record: say so and block the add
+          metadataLookupFailed.value = true
+          metadataLookupRegions.value = tried
+        } else if (result.enriched) {
+          enriched.value = result.enriched
+          metadataSource.value = result.source || null
+        }
       } finally {
         if (isCurrentSeed(generation)) {
           metadataLoading.value = false
@@ -1396,6 +1459,7 @@ const getAlreadyExistingAudiobook = (error: unknown): Audiobook | null => {
 
 const addToLibrary = async () => {
   if (!props.book) return
+  if (metadataLookupFailed.value) return
   if (destinationPathValidationError.value) {
     toast.error('Invalid destination', destinationPathValidationError.value)
     return
@@ -1845,6 +1909,29 @@ const capitalizeFirst = (str: string): string => {
   .btn {
     justify-content: center;
   }
+}
+
+.metadata-not-found {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  background-color: rgba(255, 152, 0, 0.08);
+  border: 1px solid rgba(255, 152, 0, 0.35);
+  color: #ffb74d;
+}
+
+.metadata-not-found p {
+  margin: 0;
+}
+
+.metadata-not-found svg {
+  flex-shrink: 0;
+  margin-top: 0.2rem;
 }
 
 .path-length-warning,
