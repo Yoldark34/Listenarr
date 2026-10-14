@@ -37,5 +37,30 @@ namespace Listenarr.Application.Downloads.Queue
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
         }
+
+        /// <summary>
+        /// Runs the automatic indexer search for each query from <see cref="Expand"/> until one returns
+        /// results, and returns the query that produced them.
+        /// </summary>
+        public static async Task<(string Query, List<SearchResult> Results)> SearchAsync(
+            ISearchService searchService,
+            string primaryQuery,
+            string? title)
+        {
+            var query = primaryQuery;
+            List<SearchResult> results = [];
+            foreach (var candidate in Expand(primaryQuery, title))
+            {
+                query = candidate;
+                var category = candidate == primaryQuery ? null : RetryCategory;
+                results = await searchService.SearchAsync(candidate, category, isAutomaticSearch: true) ?? [];
+                if (results.Count > 0)
+                {
+                    break;
+                }
+            }
+
+            return (query, results);
+        }
     }
 }
