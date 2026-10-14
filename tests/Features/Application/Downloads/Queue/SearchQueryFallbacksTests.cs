@@ -15,10 +15,14 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
+using Listenarr.Tests.Common;
+
 namespace Listenarr.Tests.Features.Application.Downloads.Queue
 {
     [Trait("Area", "Search")]
-    public class SearchQueryFallbacksTests
+    [Trait("Name", "SearchQueryFallbacksTests")]
+    [Trait("Category", "Search")]
+    public class SearchQueryFallbacksTests : BaseTests
     {
         [Fact]
         public void Expand_KeepsCombinedQueryFirst()
@@ -60,6 +64,28 @@ namespace Listenarr.Tests.Features.Application.Downloads.Queue
             var queries = SearchQueryFallbacks.Expand("Dune Frank Herbert", null);
 
             Assert.Equal(new[] { "Dune Frank Herbert" }, queries);
+        }
+
+        [Fact]
+        public async Task SearchAsync_RetriesWithTitleInAudiobookCategoryAndStopsAtFirstResults()
+        {
+            // An author credited as "Stephen King (alias Richard Bachman)" makes the combined query find nothing.
+            var search = new Mock<ISearchService>();
+            search.Setup(s => s.SearchAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<List<string>?>(),
+                    It.IsAny<SearchSortBy>(), It.IsAny<SearchSortDirection>(), true))
+                .ReturnsAsync((string query, string? _, List<string>? _, SearchSortBy _, SearchSortDirection _, bool _) =>
+                    query == "Marche ou crève" ? [new SearchResult { Title = "Marche.ou.creve.Stephen.King.FR" }] : []);
+
+            var (query, results) = await SearchQueryFallbacks.SearchAsync(
+                search.Object, "Marche ou crève Stephen King (alias Richard Bachman)", "Marche ou crève");
+
+            Assert.Equal("Marche ou crève", query);
+            Assert.Single(results);
+            search.Verify(s => s.SearchAsync("Marche ou crève Stephen King (alias Richard Bachman)", null, It.IsAny<List<string>?>(),
+                It.IsAny<SearchSortBy>(), It.IsAny<SearchSortDirection>(), true), Times.Once);
+            search.Verify(s => s.SearchAsync("Marche ou crève", SearchQueryFallbacks.RetryCategory, It.IsAny<List<string>?>(),
+                It.IsAny<SearchSortBy>(), It.IsAny<SearchSortDirection>(), true), Times.Once);
+            search.VerifyNoOtherCalls();
         }
     }
 }

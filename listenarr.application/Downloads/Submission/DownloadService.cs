@@ -157,16 +157,7 @@ namespace Listenarr.Application.Downloads.Submission
             // Search using the working search service. This is an automatic search (triggered
             // by the background/manual 'search-and-download' endpoint), so set isAutomaticSearch
             // to true to ensure only indexers are queried (no Amazon/Audible scraping).
-            List<SearchResult>? searchResults = null;
-            foreach (var fallbackQuery in SearchQueryFallbacks.Expand(searchQuery, audiobook.Title))
-            {
-                var category = fallbackQuery == searchQuery ? null : SearchQueryFallbacks.RetryCategory;
-                searchResults = await searchService.SearchAsync(fallbackQuery, category, isAutomaticSearch: true);
-                if (searchResults != null && searchResults.Any())
-                {
-                    break;
-                }
-            }
+            var (_, searchResults) = await SearchQueryFallbacks.SearchAsync(searchService, searchQuery, audiobook.Title);
 
             if (searchResults == null || !searchResults.Any())
             {
