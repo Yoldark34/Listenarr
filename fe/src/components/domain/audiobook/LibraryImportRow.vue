@@ -77,13 +77,11 @@
         <div v-else-if="item.selectedMatch" class="match-status matched">
           <PhCheckCircle :size="14" class="match-icon-ok" />
           <div class="match-copy">
-            <!-- The subtitle often carries the volume ("Primal Hunter: Primal Hunter, Tome 4") -->
             <span
               class="match-title"
-              data-testid="match-title"
-              :title="matchTooltip(item.selectedMatch)"
+              :title="item.selectedMatch.asin ? `ASIN: ${item.selectedMatch.asin}` : undefined"
             >
-              {{ matchTitle(item.selectedMatch) }}
+              {{ item.selectedMatch.title }}
             </span>
             <span
               v-if="item.selectedMatch.authors?.length"
@@ -93,18 +91,6 @@
             >
               {{ item.selectedMatch.authors[0]?.name }}
             </span>
-            <a
-              v-if="item.selectedMatch.asin"
-              class="match-audible-link"
-              data-testid="match-audible-link"
-              :href="buildAudibleProductUrl(item.selectedMatch.asin, item.selectedMatch.region)"
-              target="_blank"
-              rel="noopener noreferrer"
-              title="Open on Audible"
-              aria-label="Open the matched book on Audible"
-            >
-              <PhArrowSquareOut :size="14" />
-            </a>
           </div>
           <button class="btn-clear-match" title="Clear match" @click="store.clearMatch(item.id)">
             x
@@ -142,29 +128,13 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import {
-  PhArrowSquareOut,
-  PhSpinner,
-  PhCheckCircle,
-  PhWarningCircle,
-  PhMagnifyingGlass,
-} from '@phosphor-icons/vue'
-import { buildAudibleProductUrl } from '@/utils/marketDomains'
+import { PhSpinner, PhCheckCircle, PhWarningCircle, PhMagnifyingGlass } from '@phosphor-icons/vue'
 import { useLibraryImportStore } from '@/stores/libraryImport'
 import type { LibraryImportItem } from '@/stores/libraryImport'
 import type { SearchResult } from '@/types'
 import LibraryImportSearchModal from './LibraryImportSearchModal.vue'
 
 const props = defineProps<{ item: LibraryImportItem }>()
-
-function matchTitle(match: SearchResult): string {
-  return [match.title, match.subtitle].filter(Boolean).join(': ')
-}
-
-function matchTooltip(match: SearchResult): string {
-  const asin = match.asin ? `ASIN ${match.asin}${match.region ? ` (${match.region})` : ''}` : ''
-  return [matchTitle(match), asin].filter(Boolean).join(' · ')
-}
 
 const store = useLibraryImportStore()
 const showSearchModal = ref(false)
@@ -420,7 +390,7 @@ function formatGroupedFileLabel(sourceFile: string): string {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 320px;
+  max-width: 200px;
 }
 
 .match-author {
@@ -447,7 +417,7 @@ function formatGroupedFileLabel(sourceFile: string): string {
 .btn-clear-match {
   background: none;
   border: none;
-  color: #ef4444;
+  color: #888;
   cursor: pointer;
   font-size: 0.95rem;
   line-height: 1;
@@ -457,17 +427,7 @@ function formatGroupedFileLabel(sourceFile: string): string {
 }
 
 .btn-clear-match:hover {
-  color: #f87171;
-}
-
-.match-audible-link {
-  display: inline-flex;
-  color: #888;
-  flex-shrink: 0;
-}
-
-.match-audible-link:hover {
-  color: #f39c12;
+  color: #ef4444;
 }
 
 .btn-search-toggle {
