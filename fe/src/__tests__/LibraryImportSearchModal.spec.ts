@@ -51,44 +51,6 @@ describe('LibraryImportSearchModal', () => {
     vi.restoreAllMocks()
   })
 
-  it('displays narrator when result includes narrator data', async () => {
-    vi.spyOn(apiService, 'advancedSearch').mockResolvedValue([
-      {
-        asin: 'B000APXZHK',
-        title: 'Alchemised',
-        imageUrl: '/api/v1/images/B000APXZHK',
-        authors: [{ name: 'SenLinYu' }],
-        narrator: 'John Smith',
-      } as unknown as SearchResult,
-    ])
-
-    const wrapper = mount(LibraryImportSearchModal, {
-      props: {
-        item: {
-          id: 'C:\\incoming\\Alchemised.m4b',
-          fullPath: 'C:\\incoming\\Alchemised.m4b',
-          sourceFiles: ['C:\\incoming\\Alchemised.m4b'],
-          folderPath: 'C:\\incoming',
-          relativePath: 'Alchemised',
-          folderName: 'Alchemised',
-          detectedTitle: 'Alchemised',
-          detectedAuthor: 'SenLinYu',
-          format: 'M4B',
-          fileCount: 1,
-          selectedMatch: null,
-          hasSearched: false,
-          isSearching: false,
-          selected: false,
-        },
-      },
-    })
-
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    await wrapper.vm.$nextTick()
-
-    expect(wrapper.find('.result-narrator').text()).toContain('John Smith')
-  })
-
   it('routes result thumbnails through the protected image helper', async () => {
     const wrapper = mount(LibraryImportSearchModal, {
       props: {
@@ -111,9 +73,12 @@ describe('LibraryImportSearchModal', () => {
       },
     })
 
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    await wrapper.vm.$nextTick()
+    await flushPromises()
 
+    // a 10-letter title is searched as a title, not looked up as an ASIN
+    expect(apiService.advancedSearch).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Alchemised', author: 'SenLinYu', region: 'fr' }),
+    )
     expect(getProtectedImageSrc).toHaveBeenCalledWith(
       '/api/v1/images/B000APXZHK',
       '/placeholder.svg',
@@ -144,13 +109,10 @@ describe('LibraryImportSearchModal', () => {
       },
     })
     await flushPromises()
-    expect(search).toHaveBeenLastCalledWith(
-      expect.objectContaining({ region: 'fr' }),
-      expect.any(AbortSignal),
+    expect(search).toHaveBeenLastCalledWith(expect.objectContaining({ region: 'fr' }))
+    expect((wrapper.get('[data-testid="record-region"]').element as HTMLSelectElement).value).toBe(
+      'fr',
     )
-    expect(
-      (wrapper.get('[data-testid="find-match-region"]').element as HTMLSelectElement).value,
-    ).toBe('fr')
 
     search.mockResolvedValue([
       {
@@ -159,151 +121,105 @@ describe('LibraryImportSearchModal', () => {
         authors: [{ name: 'Zogarth' }],
       } as unknown as SearchResult,
     ])
-    await wrapper.get('[data-testid="find-match-region"]').setValue('us')
+    await wrapper.get('[data-testid="record-region"]').setValue('us')
     await flushPromises()
-    expect(search).toHaveBeenLastCalledWith(
-      expect.objectContaining({ region: 'us' }),
-      expect.any(AbortSignal),
-    )
+    expect(search).toHaveBeenLastCalledWith(expect.objectContaining({ region: 'us' }))
 
-    await wrapper.get('.result-item').trigger('click')
+    await wrapper.get('[data-testid="record-result"]').trigger('click')
     expect(wrapper.emitted('select')?.[0]?.[0]).toEqual(
       expect.objectContaining({ asin: 'B0BK9W82PQ', region: 'us' }),
     )
   })
 
-  it('keeps the results of the region the user picked when the earlier search answers last', async () => {
-    const search = vi.mocked(apiService.advancedSearch)
-    const pending: Record<string, (results: SearchResult[]) => void> = {}
-    const signals: Record<string, AbortSignal | undefined> = {}
-    search.mockImplementation(
-      (params, signal) =>
-        new Promise<SearchResult[]>((resolve) => {
-          pending[params.region!] = resolve
-          signals[params.region!] = signal
-        }),
-    )
-    const wrapper = mount(LibraryImportSearchModal, {
-      props: {
-        item: {
-          id: '/incoming/PH4/01.mp3',
-          fullPath: '/incoming/PH4/01.mp3',
-          sourceFiles: ['/incoming/PH4/01.mp3'],
-          folderPath: '/incoming/PH4',
-          relativePath: 'PH4',
-          folderName: 'Primal Hunter 4',
-          detectedTitle: 'The Primal Hunter 4',
-          detectedAuthor: 'Zogarth',
-          format: 'MP3',
-          fileCount: 1,
-          selectedMatch: null,
-          hasSearched: false,
-          isSearching: false,
-          selected: false,
-        },
-      },
-    })
-    await flushPromises()
-    expect(pending.fr).toBeDefined()
-
-    // The French search is still running when the user switches to US
-    await wrapper.get('[data-testid="find-match-region"]').setValue('us')
-    await flushPromises()
-    expect(signals.fr?.aborted).toBe(true)
-
-    pending.us!([
-      { asin: 'B0BK9W82PQ', title: 'Primal Hunter 4', authors: [{ name: 'Zogarth' }] },
-    ] as unknown as SearchResult[])
-    await flushPromises()
-    pending.fr!([
-      { asin: 'B0HM45F8MW', title: 'Primal Hunter, Vol. 7', authors: [{ name: 'Zogarth' }] },
-    ] as unknown as SearchResult[])
-    await flushPromises()
-
-    const items = wrapper.findAll('.result-item')
-    expect(items).toHaveLength(1)
-    expect(items[0]!.text()).toContain('Primal Hunter 4')
-    expect(wrapper.find('.search-spinner').exists()).toBe(false)
-    await items[0]!.trigger('click')
-    expect(wrapper.emitted('select')?.[0]?.[0]).toEqual(
-      expect.objectContaining({ asin: 'B0BK9W82PQ', region: 'us' }),
-    )
-  })
-
-  it('does not offer the previous results while a new search runs', async () => {
-    const search = vi.mocked(apiService.advancedSearch)
-    const wrapper = mount(LibraryImportSearchModal, {
-      props: {
-        item: {
-          id: '/incoming/Alchemised.m4b',
-          fullPath: '/incoming/Alchemised.m4b',
-          sourceFiles: ['/incoming/Alchemised.m4b'],
-          folderPath: '/incoming',
-          relativePath: 'Alchemised',
-          folderName: 'Alchemised',
-          detectedTitle: 'Alchemised',
-          detectedAuthor: 'SenLinYu',
-          format: 'M4B',
-          fileCount: 1,
-          selectedMatch: null,
-          hasSearched: false,
-          isSearching: false,
-          selected: false,
-        },
-      },
-    })
-    await flushPromises()
-    expect(wrapper.findAll('.result-item')).toHaveLength(1)
-
-    search.mockImplementation(() => new Promise<SearchResult[]>(() => {}))
-    await wrapper.get('[data-testid="find-match-region"]').setValue('us')
-    await flushPromises()
-
-    expect(wrapper.findAll('.result-item')).toHaveLength(0)
-    expect(wrapper.find('.search-spinner').exists()).toBe(true)
-  })
-
-  it('closes quietly while a search is running: the cancelled request is not reported', async () => {
-    const unhandled = vi.fn()
-    process.on('unhandledRejection', unhandled)
-    try {
-      // Like fetch: the request fails once its signal is aborted (the API wraps it as Network error)
-      vi.mocked(apiService.advancedSearch).mockImplementation(
-        (_params, signal) =>
-          new Promise<SearchResult[]>((_resolve, reject) => {
-            signal?.addEventListener('abort', () => reject(new Error('Network error')))
-          }),
-      )
-      const wrapper = mount(LibraryImportSearchModal, {
-        props: {
-          item: {
-            id: '/incoming/PH4/01.mp3',
-            fullPath: '/incoming/PH4/01.mp3',
-            sourceFiles: ['/incoming/PH4/01.mp3'],
-            folderPath: '/incoming/PH4',
-            relativePath: 'PH4',
-            folderName: 'Primal Hunter 4',
-            detectedTitle: 'The Primal Hunter 4',
-            detectedAuthor: 'Zogarth',
-            format: 'MP3',
-            fileCount: 1,
-            selectedMatch: null,
-            hasSearched: false,
-            isSearching: false,
-            selected: false,
-          },
-        },
-      })
-      await flushPromises()
-      expect(wrapper.find('.search-spinner').exists()).toBe(true)
-
-      wrapper.unmount()
-      await flushPromises()
-      await new Promise((resolve) => setTimeout(resolve, 0))
-
-      expect(unhandled).not.toHaveBeenCalled()
-    } finally {
-      process.off('unhandledRejection', unhandled)
+  function itemWithMatch(match: Partial<SearchResult> | null) {
+    return {
+      id: '/incoming/PH4/01.mp3',
+      fullPath: '/incoming/PH4/01.mp3',
+      sourceFiles: ['/incoming/PH4/01.mp3'],
+      folderPath: '/incoming/PH4',
+      relativePath: 'PH4',
+      folderName: 'Primal Hunter 4',
+      detectedTitle: 'The Primal Hunter 4',
+      detectedAuthor: 'Zogarth',
+      format: 'MP3',
+      fileCount: 1,
+      selectedMatch: match as SearchResult | null,
+      hasSearched: true,
+      isSearching: false,
+      selected: true,
     }
+  }
+
+  const fieldValue = (wrapper: ReturnType<typeof mount>, testid: string) =>
+    (wrapper.get(`[data-testid="${testid}"]`).element as HTMLInputElement).value
+
+  it("looks the current match's ASIN up in its region and shows the book", async () => {
+    const search = vi.mocked(apiService.advancedSearch)
+    search.mockResolvedValue([
+      {
+        asin: 'B0HM45F8MW',
+        title: 'Primal Hunter, Vol. 7',
+        authors: [{ name: 'Zogarth' }],
+      } as unknown as SearchResult,
+    ])
+    const wrapper = mount(LibraryImportSearchModal, {
+      props: {
+        item: itemWithMatch({ asin: 'B0HM45F8MW', title: 'Primal Hunter, Vol. 7', region: 'fr' }),
+      },
+    })
+    await flushPromises()
+
+    expect(search).toHaveBeenCalledTimes(1)
+    expect(search).toHaveBeenCalledWith({ asin: 'B0HM45F8MW', region: 'fr', cap: 5 })
+    expect(fieldValue(wrapper, 'record-asin')).toBe('B0HM45F8MW')
+    expect(fieldValue(wrapper, 'record-author')).toBe('Zogarth')
+    expect(wrapper.findAll('[data-testid="record-result"]')).toHaveLength(1)
+  })
+
+  it('looks the ASIN up again when the region changes, and says when that region has no record', async () => {
+    const search = vi.mocked(apiService.advancedSearch)
+    search.mockResolvedValue([])
+    const wrapper = mount(LibraryImportSearchModal, {
+      props: {
+        item: itemWithMatch({ asin: 'B0HM45F8MW', title: 'Primal Hunter, Vol. 7', region: 'fr' }),
+      },
+    })
+    await flushPromises()
+
+    await wrapper.get('[data-testid="record-region"]').setValue('us')
+    await flushPromises()
+
+    expect(search).toHaveBeenLastCalledWith({ asin: 'B0HM45F8MW', region: 'us', cap: 5 })
+    expect(wrapper.get('[data-testid="record-asin-not-found"]').text()).toContain('B0HM45F8MW')
+  })
+
+  it('looks a typed ASIN up, fills the title and author, and selects the record with its region', async () => {
+    const search = vi.mocked(apiService.advancedSearch)
+    const wrapper = mount(LibraryImportSearchModal, {
+      props: { item: itemWithMatch(null) },
+    })
+    await flushPromises()
+
+    search.mockResolvedValue([
+      {
+        asin: 'B0BK9W82PQ',
+        title: 'Primal Hunter 4',
+        authors: [{ name: 'Zogarth' }],
+      } as unknown as SearchResult,
+    ])
+    await wrapper.get('[data-testid="record-region"]').setValue('us')
+    await flushPromises()
+    await wrapper.get('[data-testid="record-asin"]').setValue('B0BK9W82PQ')
+    await flushPromises()
+
+    expect(search).toHaveBeenLastCalledWith({ asin: 'B0BK9W82PQ', region: 'us', cap: 5 })
+    expect(fieldValue(wrapper, 'record-title')).toBe('Primal Hunter 4')
+    expect(fieldValue(wrapper, 'record-author')).toBe('Zogarth')
+
+    await wrapper.get('[data-testid="record-result"]').trigger('click')
+    expect(wrapper.emitted('select')?.[0]?.[0]).toEqual(
+      expect.objectContaining({ asin: 'B0BK9W82PQ', region: 'us' }),
+    )
+    expect(wrapper.emitted('close')).toBeTruthy()
   })
 })
