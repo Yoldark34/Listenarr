@@ -58,7 +58,7 @@
         data-testid="issues-show-ignored"
         @click="issuesStore.showIgnored = !issuesStore.showIgnored"
       >
-        <component :is="issuesStore.showIgnored ? PhToggleRight : PhToggleLeft" />
+        <component :is="issuesStore.showIgnored ? PhToggleRight : PhToggleLeft" :size="22" />
         <span class="issues-ignored-label">
           Show ignored books ({{ issuesStore.ignored.length }})
         </span>
@@ -66,7 +66,7 @@
       <button
         v-if="visibleItems.length"
         type="button"
-        class="btn btn-primary"
+        class="btn btn-primary issues-repair-selected"
         data-testid="issues-repair-selected"
         :disabled="!selectedIds.length"
         @click="openRepair(selectedIds)"
@@ -422,28 +422,29 @@ onBeforeUnmount(() => {
   opacity: 0.75;
 }
 
-/* Everything after the selection sits on the right: the ignored-books switch, then Repair (alone
-   when no book is ignored) */
-.issues-ignored-toggle,
-.issues-count + .btn {
+/* The selection and the ignored-books switch on the left, Repair on the right */
+.issues-repair-selected,
+.issues-toolbar-bottom .btn {
   margin-left: auto;
 }
 
-.issues-toolbar-bottom .issues-count {
-  margin-right: auto;
-}
-
-.issues-toolbar-bottom .issues-count + .btn {
-  margin-left: 0;
-}
-
-/* The switch keeps the app's colors (green on, red off) on its icon only */
+/* The switch keeps the app's colors (green on, red off) on its icon; it must not shrink, or the
+   icon is squeezed to nothing and the label wraps */
 .issues-ignored-toggle {
+  flex-shrink: 0;
   gap: 0.4rem;
+  white-space: nowrap;
 }
 
+.issues-ignored-toggle svg {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+}
+
+/* Same color as the rest of the toolbar (the button's own color is the switch state) */
 .issues-ignored-label {
-  color: var(--text-color, #e0e0e0);
+  color: #ffffff;
 }
 
 .issues-toolbar .btn,
