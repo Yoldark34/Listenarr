@@ -16,10 +16,22 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { apiService } from '@/services/api'
 import { logger } from '@/utils/logger'
 import type { LibraryIssue } from '@/types'
+
+// Whether ignored books are shown and counted, kept in this browser like the library's display
+// choices
+const SHOW_IGNORED_KEY = 'listenarr.issuesShowIgnored'
+
+function readShowIgnored(): boolean {
+  try {
+    return localStorage.getItem(SHOW_IGNORED_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
 
 // The books whose Audible identity is incomplete, shown in Issues (under System) with their count.
 // Ignored books are kept too: they are listed on demand and keep the Issues page available.
@@ -29,8 +41,14 @@ export const useLibraryIssuesStore = defineStore('libraryIssues', () => {
   const loaded = ref(false)
   const active = computed(() => items.value.filter((i) => !i.ignored))
   const ignored = computed(() => items.value.filter((i) => i.ignored))
-  // The orange count: issues that are not ignored
-  const count = computed(() => active.value.length)
+  const showIgnored = ref(readShowIgnored())
+  watch(showIgnored, (v) => {
+    try {
+      localStorage.setItem(SHOW_IGNORED_KEY, v ? 'true' : 'false')
+    } catch {}
+  })
+  // The orange count: the books listed on the Issues page, ignored ones only while they are shown
+  const count = computed(() => (showIgnored.value ? items.value.length : active.value.length))
   // The Issues page exists while there is something to repair or something ignored
   const hasAny = computed(() => items.value.length > 0)
 
@@ -51,5 +69,16 @@ export const useLibraryIssuesStore = defineStore('libraryIssues', () => {
     }
   }
 
-  return { items, active, ignored, loading, loaded, count, hasAny, load, setIgnored }
+  return {
+    items,
+    active,
+    ignored,
+    showIgnored,
+    loading,
+    loaded,
+    count,
+    hasAny,
+    load,
+    setIgnored,
+  }
 })

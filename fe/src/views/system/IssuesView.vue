@@ -30,10 +30,51 @@
       <PhSpinner class="ph-spin" /> Loading…
     </div>
 
-    <label v-if="issuesStore.ignored.length" class="issues-filter">
-      <input v-model="showIgnored" type="checkbox" data-testid="issues-show-ignored" />
-      Show ignored books ({{ issuesStore.ignored.length }})
-    </label>
+    <!-- Shown as soon as there are ignored books, so they can be listed even when nothing else is -->
+    <div v-if="visibleItems.length || issuesStore.ignored.length" class="issues-toolbar">
+      <template v-if="visibleItems.length">
+        <label class="issues-select-all">
+          <input
+            type="checkbox"
+            data-testid="issues-select-all"
+            :checked="allSelected"
+            :indeterminate="someSelected && !allSelected"
+            @change="toggleAll"
+          />
+          Select all
+        </label>
+        <span class="issues-count">
+          {{ selectedIds.length }} of {{ visibleItems.length }} selected
+        </span>
+      </template>
+      <button
+        v-if="issuesStore.ignored.length"
+        type="button"
+        role="switch"
+        class="icon-button action-secondary action-toggle issues-ignored-toggle"
+        :class="{ active: issuesStore.showIgnored }"
+        :aria-checked="issuesStore.showIgnored"
+        :title="issuesStore.showIgnored ? 'Hide ignored books' : 'Show ignored books'"
+        data-testid="issues-show-ignored"
+        @click="issuesStore.showIgnored = !issuesStore.showIgnored"
+      >
+        <component :is="issuesStore.showIgnored ? PhToggleRight : PhToggleLeft" />
+        <span class="issues-ignored-label">
+          Show ignored books ({{ issuesStore.ignored.length }})
+        </span>
+      </button>
+      <button
+        v-if="visibleItems.length"
+        type="button"
+        class="btn btn-primary"
+        data-testid="issues-repair-selected"
+        :disabled="!selectedIds.length"
+        @click="openRepair(selectedIds)"
+      >
+        <PhWrench :size="16" />
+        {{ repairSelectedLabel }}
+      </button>
+    </div>
 
     <div
       v-if="issuesStore.loaded && !visibleItems.length"
@@ -48,32 +89,6 @@
     </div>
 
     <template v-else-if="visibleItems.length">
-      <div class="issues-toolbar">
-        <label class="issues-select-all">
-          <input
-            type="checkbox"
-            data-testid="issues-select-all"
-            :checked="allSelected"
-            :indeterminate="someSelected && !allSelected"
-            @change="toggleAll"
-          />
-          Select all
-        </label>
-        <span class="issues-count">
-          {{ selectedIds.length }} of {{ visibleItems.length }} selected
-        </span>
-        <button
-          type="button"
-          class="btn btn-primary"
-          data-testid="issues-repair-selected"
-          :disabled="!selectedIds.length"
-          @click="openRepair(selectedIds)"
-        >
-          <PhWrench :size="16" />
-          {{ repairSelectedLabel }}
-        </button>
-      </div>
-
       <div ref="listEl" class="issues-list">
         <div
           v-for="book in visibleItems"
@@ -194,6 +209,8 @@ import {
   PhEye,
   PhEyeSlash,
   PhSpinner,
+  PhToggleLeft,
+  PhToggleRight,
   PhWarning,
   PhWrench,
 } from '@phosphor-icons/vue'
@@ -212,10 +229,9 @@ const router = useRouter()
 const { getProtectedImageSrc } = useProtectedImages()
 const placeholderUrl = getPlaceholderUrl()
 
-// Ignored books are listed on demand, after the others
-const showIgnored = ref(false)
+// Ignored books are listed on demand, after the others (the choice is kept by the store)
 const visibleItems = computed(() =>
-  showIgnored.value ? [...issuesStore.active, ...issuesStore.ignored] : issuesStore.active,
+  issuesStore.showIgnored ? [...issuesStore.active, ...issuesStore.ignored] : issuesStore.active,
 )
 
 const selected = ref(new Set<number>())
@@ -404,7 +420,30 @@ onBeforeUnmount(() => {
 
 .issues-count {
   opacity: 0.75;
+}
+
+/* Everything after the selection sits on the right: the ignored-books switch, then Repair (alone
+   when no book is ignored) */
+.issues-ignored-toggle,
+.issues-count + .btn {
+  margin-left: auto;
+}
+
+.issues-toolbar-bottom .issues-count {
   margin-right: auto;
+}
+
+.issues-toolbar-bottom .issues-count + .btn {
+  margin-left: 0;
+}
+
+/* The switch keeps the app's colors (green on, red off) on its icon only */
+.issues-ignored-toggle {
+  gap: 0.4rem;
+}
+
+.issues-ignored-label {
+  color: var(--text-color, #e0e0e0);
 }
 
 .issues-toolbar .btn,
@@ -471,13 +510,6 @@ onBeforeUnmount(() => {
 .issues-asin {
   font-family: monospace;
   font-size: 0.85rem;
-}
-
-.issues-filter {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-bottom: 0.75rem;
 }
 
 .issues-row-ignored {

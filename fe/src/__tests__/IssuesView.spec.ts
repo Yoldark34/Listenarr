@@ -66,6 +66,7 @@ function mountView() {
 describe('IssuesView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    window.localStorage.clear()
     setLibraryIssueIgnored.mockResolvedValue({})
   })
 
@@ -155,7 +156,7 @@ describe('IssuesView', () => {
     expect(setLibraryIssueIgnored).toHaveBeenCalledWith(9, true)
     expect(wrapper.find('[data-testid="issues-row-9"]').exists()).toBe(false)
 
-    await wrapper.get('[data-testid="issues-show-ignored"]').setValue(true)
+    await wrapper.get('[data-testid="issues-show-ignored"]').trigger('click')
     expect(wrapper.get('[data-testid="issues-row-9"]').text()).toContain('Ignored')
 
     await wrapper
@@ -191,7 +192,7 @@ describe('IssuesView', () => {
       showConfirm.mockResolvedValue(keep)
       const wrapper = mountView()
       await flushPromises()
-      await wrapper.get('[data-testid="issues-show-ignored"]').setValue(true)
+      await wrapper.get('[data-testid="issues-show-ignored"]').trigger('click')
 
       await wrapper
         .get('[data-testid="issues-row-9"] [data-testid="issues-repair"]')
@@ -217,5 +218,42 @@ describe('IssuesView', () => {
 
     expect(routerReplace).not.toHaveBeenCalled()
     expect(wrapper.get('[data-testid="issues-empty"]').text()).toContain('1 ignored book is hidden')
+  })
+
+  it('switches the ignored books on and off next to Repair, even when only ignored books are left', async () => {
+    getLibraryIssues.mockResolvedValue([{ ...issues[1]!, ignored: true }])
+    const wrapper = mountView()
+    await flushPromises()
+
+    const toggle = wrapper.get('[data-testid="issues-show-ignored"]')
+    expect(toggle.attributes('role')).toBe('switch')
+    expect(toggle.attributes('aria-checked')).toBe('false')
+    expect(toggle.text()).toContain('Show ignored books (1)')
+    expect(wrapper.find('[data-testid="issues-repair-selected"]').exists()).toBe(false)
+
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-checked')).toBe('true')
+    expect(toggle.classes()).toContain('active')
+    // Now listed, the book can be selected and repaired from the same line
+    const toolbar = wrapper.get('.issues-toolbar')
+    expect(toolbar.find('[data-testid="issues-show-ignored"]').exists()).toBe(true)
+    expect(toolbar.find('[data-testid="issues-repair-selected"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="issues-row-9"]').exists()).toBe(true)
+
+    await toggle.trigger('click')
+    expect(wrapper.find('[data-testid="issues-row-9"]').exists()).toBe(false)
+  })
+
+  it('keeps the choice to show ignored books for the next visit', async () => {
+    getLibraryIssues.mockResolvedValue([issues[0], { ...issues[1]!, ignored: true }])
+    const first = mountView()
+    await flushPromises()
+    await first.get('[data-testid="issues-show-ignored"]').trigger('click')
+    first.unmount()
+
+    const back = mountView()
+    await flushPromises()
+    expect(back.get('[data-testid="issues-show-ignored"]').attributes('aria-checked')).toBe('true')
+    expect(back.find('[data-testid="issues-row-9"]').exists()).toBe(true)
   })
 })
