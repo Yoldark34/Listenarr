@@ -428,11 +428,16 @@ onBeforeUnmount(() => {
   margin-left: auto;
 }
 
-/* The switch keeps the app's colors (green on, red off) on its icon; it must not shrink, or the
-   icon is squeezed to nothing and the label wraps */
+/* The switch keeps the app's colors (green on, red off) on its icon. .icon-button is a 36px square
+   for an icon alone: this one also carries its label, so it takes its content's width and must not
+   shrink, or the label overflows onto the selection count */
 .issues-ignored-toggle {
+  width: auto;
+  height: auto;
   flex-shrink: 0;
   gap: 0.4rem;
+  padding: 0.25rem 0.5rem;
+  font-size: inherit;
   white-space: nowrap;
 }
 
