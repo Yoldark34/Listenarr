@@ -78,6 +78,7 @@ describe('LibraryImportSearchModal', () => {
     // a 10-letter title is searched as a title, not looked up as an ASIN
     expect(apiService.advancedSearch).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'Alchemised', author: 'SenLinYu', region: 'fr' }),
+      expect.any(AbortSignal),
     )
     expect(getProtectedImageSrc).toHaveBeenCalledWith(
       '/api/v1/images/B000APXZHK',
@@ -109,7 +110,10 @@ describe('LibraryImportSearchModal', () => {
       },
     })
     await flushPromises()
-    expect(search).toHaveBeenLastCalledWith(expect.objectContaining({ region: 'fr' }))
+    expect(search).toHaveBeenLastCalledWith(
+      expect.objectContaining({ region: 'fr' }),
+      expect.any(AbortSignal),
+    )
     expect((wrapper.get('[data-testid="record-region"]').element as HTMLSelectElement).value).toBe(
       'fr',
     )
@@ -125,7 +129,10 @@ describe('LibraryImportSearchModal', () => {
     ])
     await wrapper.get('[data-testid="record-region"]').setValue('us')
     await flushPromises()
-    expect(search).toHaveBeenLastCalledWith(expect.objectContaining({ region: 'us' }))
+    expect(search).toHaveBeenLastCalledWith(
+      expect.objectContaining({ region: 'us' }),
+      expect.any(AbortSignal),
+    )
 
     await wrapper.get('[data-testid="record-result"]').trigger('click')
     expect(wrapper.emitted('select')?.[0]?.[0]).toEqual(
@@ -183,12 +190,15 @@ describe('LibraryImportSearchModal', () => {
     expect(fieldValue(wrapper, 'record-title')).toBe('Primal Hunter 4')
     expect(fieldValue(wrapper, 'record-asin')).toBe('B0HM45F8MW')
     expect(search).toHaveBeenCalledTimes(1)
-    expect(search).toHaveBeenCalledWith({
-      title: 'Primal Hunter 4',
-      author: 'Zogarth',
-      region: 'fr',
-      cap: 8,
-    })
+    expect(search).toHaveBeenCalledWith(
+      {
+        title: 'Primal Hunter 4',
+        author: 'Zogarth',
+        region: 'fr',
+        cap: 8,
+      },
+      expect.any(AbortSignal),
+    )
     const results = wrapper.findAll('[data-testid="record-result"]')
     expect(results).toHaveLength(2)
     expect(results[0]!.classes()).toContain('picked')
@@ -213,6 +223,7 @@ describe('LibraryImportSearchModal', () => {
     expect(fieldValue(wrapper, 'record-title')).toBe('Jack of Shadows')
     expect(apiService.advancedSearch).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'Jack of Shadows' }),
+      expect.any(AbortSignal),
     )
   })
 
@@ -229,7 +240,10 @@ describe('LibraryImportSearchModal', () => {
     await wrapper.get('[data-testid="record-region"]').setValue('us')
     await flushPromises()
 
-    expect(search).toHaveBeenLastCalledWith({ asin: 'B0HM45F8MW', region: 'us', cap: 5 })
+    expect(search).toHaveBeenLastCalledWith(
+      { asin: 'B0HM45F8MW', region: 'us', cap: 5 },
+      expect.any(AbortSignal),
+    )
     expect(wrapper.get('[data-testid="record-asin-not-found"]').text()).toContain('B0HM45F8MW')
   })
 
@@ -254,7 +268,10 @@ describe('LibraryImportSearchModal', () => {
     await wrapper.get('[data-testid="record-asin"]').setValue('B0BK9W82PQ')
     await flushPromises()
 
-    expect(search).toHaveBeenLastCalledWith({ asin: 'B0BK9W82PQ', region: 'us', cap: 5 })
+    expect(search).toHaveBeenLastCalledWith(
+      { asin: 'B0BK9W82PQ', region: 'us', cap: 5 },
+      expect.any(AbortSignal),
+    )
     expect(fieldValue(wrapper, 'record-title')).toBe('Primal Hunter 4')
     expect(fieldValue(wrapper, 'record-author')).toBe('Zogarth')
 
@@ -286,11 +303,14 @@ describe('LibraryImportSearchModal', () => {
 
     expect(fieldValue(wrapper, 'record-title')).toBe('not a match')
     expect(fieldValue(wrapper, 'record-author')).toBe('')
-    expect(apiService.advancedSearch).toHaveBeenCalledWith({
-      title: 'not a match',
-      region: 'fr',
-      cap: 8,
-    })
+    expect(apiService.advancedSearch).toHaveBeenCalledWith(
+      {
+        title: 'not a match',
+        region: 'fr',
+        cap: 8,
+      },
+      expect.any(AbortSignal),
+    )
   })
 
   it('reverts the fields to the values it opened with and searches again', async () => {
@@ -315,12 +335,15 @@ describe('LibraryImportSearchModal', () => {
     expect((wrapper.get('[data-testid="record-region"]').element as HTMLSelectElement).value).toBe(
       'fr',
     )
-    expect(search).toHaveBeenCalledWith({
-      title: 'Primal Hunter 4',
-      author: 'Zogarth',
-      region: 'fr',
-      cap: 8,
-    })
+    expect(search).toHaveBeenCalledWith(
+      {
+        title: 'Primal Hunter 4',
+        author: 'Zogarth',
+        region: 'fr',
+        cap: 8,
+      },
+      expect.any(AbortSignal),
+    )
     expect(revert().attributes('disabled')).toBeDefined()
   })
 })
