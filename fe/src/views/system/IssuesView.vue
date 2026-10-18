@@ -30,23 +30,22 @@
       <PhSpinner class="ph-spin" /> Loading…
     </div>
 
-    <!-- Shown as soon as there are ignored books, so they can be listed even when nothing else is -->
-    <div v-if="visibleItems.length || issuesStore.ignored.length" class="issues-toolbar">
-      <template v-if="visibleItems.length">
-        <label class="issues-select-all">
-          <input
-            type="checkbox"
-            data-testid="issues-select-all"
-            :checked="allSelected"
-            :indeterminate="someSelected && !allSelected"
-            @change="toggleAll"
-          />
-          Select all
-        </label>
-        <span class="issues-count">
-          {{ selectedIds.length }} of {{ visibleItems.length }} selected
-        </span>
-      </template>
+    <!-- The same page with or without issues: nothing to select only disables the selection -->
+    <div v-if="issuesStore.loaded" class="issues-toolbar">
+      <label class="issues-select-all">
+        <input
+          type="checkbox"
+          data-testid="issues-select-all"
+          :checked="allSelected"
+          :indeterminate="someSelected && !allSelected"
+          :disabled="!visibleItems.length"
+          @change="toggleAll"
+        />
+        Select all
+      </label>
+      <span class="issues-count">
+        {{ selectedIds.length }} of {{ visibleItems.length }} selected
+      </span>
       <button
         v-if="issuesStore.ignored.length"
         type="button"
@@ -64,7 +63,6 @@
         </span>
       </button>
       <button
-        v-if="visibleItems.length"
         type="button"
         class="btn btn-primary issues-repair-selected"
         data-testid="issues-repair-selected"
@@ -76,16 +74,15 @@
       </button>
     </div>
 
-    <div
-      v-if="issuesStore.loaded && !visibleItems.length"
-      class="issues-state"
-      data-testid="issues-empty"
-    >
-      <PhCheckCircle class="issues-ok" /> No issues left to repair.
-      <template v-if="issuesStore.ignored.length">
-        {{ issuesStore.ignored.length }} ignored
-        {{ issuesStore.ignored.length === 1 ? 'book is' : 'books are' }} hidden.
-      </template>
+    <!-- Nothing to list: one row in place of the first book says so -->
+    <div v-if="issuesStore.loaded && !visibleItems.length" class="issues-list">
+      <div class="issues-row issues-row-empty" data-testid="issues-empty">
+        <PhCheckCircle class="issues-ok" :size="20" /> No issues found.
+        <template v-if="issuesStore.ignored.length">
+          {{ issuesStore.ignored.length }} ignored
+          {{ issuesStore.ignored.length === 1 ? 'book is' : 'books are' }} hidden.
+        </template>
+      </div>
     </div>
 
     <template v-else-if="visibleItems.length">
@@ -203,7 +200,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { RouterLink } from 'vue-router'
 import {
   PhCheckCircle,
   PhEye,
@@ -225,7 +222,6 @@ import { issueLabel } from '@/utils/libraryIssues'
 import type { LibraryIssue } from '@/types'
 
 const issuesStore = useLibraryIssuesStore()
-const router = useRouter()
 const { getProtectedImageSrc } = useProtectedImages()
 const placeholderUrl = getPlaceholderUrl()
 
@@ -327,17 +323,9 @@ async function openRepair(ids: number[]) {
   showRepairModal.value = true
 }
 
-// The page exists while there is something to repair or something ignored; otherwise, back to the books
-async function loadOrLeave() {
-  await issuesStore.load()
-  if (issuesStore.loaded && !issuesStore.hasAny) {
-    void router.replace({ path: '/audiobooks', query: { group: 'books' } })
-  }
-}
-
 // After a repair the list is read again: repaired books leave it, the selection keeps the others
 async function refresh() {
-  await loadOrLeave()
+  await issuesStore.load()
   const remaining = new Set(visibleItems.value.map((b) => b.id))
   selected.value = new Set([...selected.value].filter((id) => remaining.has(id)))
 }
@@ -349,7 +337,6 @@ async function handleRepairDone() {
 
 async function organizeRepaired(ids: number[]) {
   showRepairModal.value = false
-  // Stay on the page until Organize is done, even when no issue is left
   await issuesStore.load()
   organizeAudiobookIds.value = ids
   showOrganizeModal.value = true
@@ -361,7 +348,7 @@ async function handleOrganizeDone() {
 }
 
 onMounted(() => {
-  void loadOrLeave()
+  void issuesStore.load()
   window.addEventListener('resize', measureList)
 })
 
@@ -403,6 +390,16 @@ onBeforeUnmount(() => {
 
 .issues-ok {
   color: #2ecc71;
+}
+
+/* Same height as a book row, its text centered */
+.issues-row-empty {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 4rem;
+  border-bottom: none;
 }
 
 .issues-toolbar {

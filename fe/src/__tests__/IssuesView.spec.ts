@@ -125,17 +125,27 @@ describe('IssuesView', () => {
     rect.mockRestore()
   })
 
-  it('goes back to the books when there is nothing to repair, including after the last repair', async () => {
+  it('stays on the page after the last repair, with one row saying no issues were found', async () => {
     getLibraryIssues.mockResolvedValue([issues[0]])
     const wrapper = mountView()
     await flushPromises()
-    expect(routerReplace).not.toHaveBeenCalled()
 
     getLibraryIssues.mockResolvedValue([])
     wrapper.findComponent(RepairStub).vm.$emit('done')
     await flushPromises()
 
-    expect(routerReplace).toHaveBeenCalledWith({ path: '/audiobooks', query: { group: 'books' } })
+    expect(routerReplace).not.toHaveBeenCalled()
+    const empty = wrapper.get('.issues-list [data-testid="issues-empty"]')
+    expect(empty.classes()).toContain('issues-row')
+    expect(empty.text()).toContain('No issues found.')
+    // Same toolbar, nothing to select
+    expect(
+      (wrapper.get('[data-testid="issues-select-all"]').element as HTMLInputElement).disabled,
+    ).toBe(true)
+    expect(
+      wrapper.get('[data-testid="issues-repair-selected"]').attributes('disabled'),
+    ).toBeDefined()
+    expect(wrapper.find('[data-testid="issues-show-ignored"]').exists()).toBe(false)
   })
 
   it('ignores a book after confirmation, then lists it again with the filter', async () => {
@@ -229,7 +239,9 @@ describe('IssuesView', () => {
     expect(toggle.attributes('role')).toBe('switch')
     expect(toggle.attributes('aria-checked')).toBe('false')
     expect(toggle.text()).toContain('Show ignored books (1)')
-    expect(wrapper.find('[data-testid="issues-repair-selected"]').exists()).toBe(false)
+    expect(
+      wrapper.get('[data-testid="issues-repair-selected"]').attributes('disabled'),
+    ).toBeDefined()
 
     await toggle.trigger('click')
     expect(toggle.attributes('aria-checked')).toBe('true')

@@ -36,14 +36,14 @@ describe('libraryIssues store', () => {
     ])
   })
 
-  it('counts ignored books in the menu only while they are shown', async () => {
+  it('never counts ignored books in the menu, whether they are listed or not', async () => {
     const store = useLibraryIssuesStore()
     await store.load()
     expect(store.showIgnored).toBe(false)
     expect(store.count).toBe(1)
 
     store.showIgnored = true
-    expect(store.count).toBe(3)
+    expect(store.count).toBe(1)
   })
 
   it('keeps the choice in this browser and starts from it', async () => {
@@ -56,6 +56,5 @@ describe('libraryIssues store', () => {
     const next = useLibraryIssuesStore()
     await next.load()
     expect(next.showIgnored).toBe(true)
-    expect(next.count).toBe(3)
   })
 })

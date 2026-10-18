@@ -472,9 +472,8 @@
               <span>System</span>
               <Pill variant="error" v-if="systemIssues > 0">{{ systemIssues }}</Pill>
             </RouterLink>
-            <!-- Books whose Audible identity is incomplete, to repair -->
+            <!-- Books whose Audible identity is incomplete, to repair (always there, counted when any) -->
             <RouterLink
-              v-if="libraryIssuesStore.hasAny"
               to="/issues"
               class="nav-item nav-issues"
               data-testid="nav-issues"

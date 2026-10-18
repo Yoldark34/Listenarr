@@ -21,7 +21,7 @@ import { apiService } from '@/services/api'
 import { logger } from '@/utils/logger'
 import type { LibraryIssue } from '@/types'
 
-// Whether ignored books are shown and counted, kept in this browser like the library's display
+// Whether the Issues page lists ignored books, kept in this browser like the library's display
 // choices
 const SHOW_IGNORED_KEY = 'listenarr.issuesShowIgnored'
 
@@ -34,7 +34,7 @@ function readShowIgnored(): boolean {
 }
 
 // The books whose Audible identity is incomplete, shown in Issues (under System) with their count.
-// Ignored books are kept too: they are listed on demand and keep the Issues page available.
+// Ignored books are kept too: they are listed on demand.
 export const useLibraryIssuesStore = defineStore('libraryIssues', () => {
   const items = ref<LibraryIssue[]>([])
   const loading = ref(false)
@@ -47,10 +47,8 @@ export const useLibraryIssuesStore = defineStore('libraryIssues', () => {
       localStorage.setItem(SHOW_IGNORED_KEY, v ? 'true' : 'false')
     } catch {}
   })
-  // The orange count: the books listed on the Issues page, ignored ones only while they are shown
-  const count = computed(() => (showIgnored.value ? items.value.length : active.value.length))
-  // The Issues page exists while there is something to repair or something ignored
-  const hasAny = computed(() => items.value.length > 0)
+  // The orange count: real issues only, ignored books never count (whether they are listed or not)
+  const count = computed(() => active.value.length)
 
   async function setIgnored(id: number, value: boolean) {
     await apiService.setLibraryIssueIgnored(id, value)
@@ -77,7 +75,6 @@ export const useLibraryIssuesStore = defineStore('libraryIssues', () => {
     loading,
     loaded,
     count,
-    hasAny,
     load,
     setIgnored,
   }
