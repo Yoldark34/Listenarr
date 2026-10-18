@@ -156,12 +156,15 @@ describe('RepairBooksModal', () => {
     await row(wrapper).get('[data-testid="record-search"]').trigger('click')
     await flushPromises()
 
-    expect(apiMocks.advancedSearch).toHaveBeenCalledWith({
-      title: 'The Primal Hunter 4',
-      author: 'Zogarth',
-      region: 'us',
-      cap: 8,
-    })
+    expect(apiMocks.advancedSearch).toHaveBeenCalledWith(
+      {
+        title: 'The Primal Hunter 4',
+        author: 'Zogarth',
+        region: 'us',
+        cap: 8,
+      },
+      expect.any(AbortSignal),
+    )
     const results = row(wrapper).findAll('[data-testid="record-result"]')
     expect(results).toHaveLength(1)
     await results[0]!.trigger('click')
@@ -201,11 +204,14 @@ describe('RepairBooksModal', () => {
     await row(wrapper).get('[data-testid="record-region"]').setValue('us')
     await flushPromises()
 
-    expect(apiMocks.advancedSearch).toHaveBeenCalledWith({
-      asin: 'B0HM45F8MW',
-      region: 'us',
-      cap: 5,
-    })
+    expect(apiMocks.advancedSearch).toHaveBeenCalledWith(
+      {
+        asin: 'B0HM45F8MW',
+        region: 'us',
+        cap: 5,
+      },
+      expect.any(AbortSignal),
+    )
     expect(row(wrapper).get('[data-testid="record-asin-not-found"]').text()).toContain('B0HM45F8MW')
     expect(wrapper.get('[data-testid="repair-confirm"]').attributes('disabled')).toBeDefined()
 
@@ -317,11 +323,14 @@ describe('RepairBooksModal', () => {
     await row(wrapper).get('[data-testid="record-asin"]').setValue('B0BK9W82PQ')
     await flushPromises()
 
-    expect(apiMocks.advancedSearch).toHaveBeenLastCalledWith({
-      asin: 'B0BK9W82PQ',
-      region: 'us',
-      cap: 5,
-    })
+    expect(apiMocks.advancedSearch).toHaveBeenLastCalledWith(
+      {
+        asin: 'B0BK9W82PQ',
+        region: 'us',
+        cap: 5,
+      },
+      expect.any(AbortSignal),
+    )
     expect(inputValue(wrapper, 'record-title')).toBe('Primal Hunter 4')
     expect(inputValue(wrapper, 'record-author')).toBe('Zogarth')
     expect(row(wrapper).find('[data-testid="record-asin-not-found"]').exists()).toBe(false)
@@ -336,11 +345,14 @@ describe('RepairBooksModal', () => {
     await row(wrapper).get('[data-testid="record-asin"]').setValue('B0BK9W82PQ')
     await flushPromises()
 
-    expect(apiMocks.advancedSearch).toHaveBeenLastCalledWith({
-      asin: 'B0BK9W82PQ',
-      region: 'fr',
-      cap: 5,
-    })
+    expect(apiMocks.advancedSearch).toHaveBeenLastCalledWith(
+      {
+        asin: 'B0BK9W82PQ',
+        region: 'fr',
+        cap: 5,
+      },
+      expect.any(AbortSignal),
+    )
     expect(row(wrapper).get('[data-testid="record-asin-not-found"]').text()).toContain('France')
     expect(inputValue(wrapper, 'record-title')).toBe('Primal Hunter, Vol. 7')
     expect(wrapper.get('[data-testid="repair-confirm"]').attributes('disabled')).toBeDefined()
@@ -355,12 +367,15 @@ describe('RepairBooksModal', () => {
     await flushPromises()
 
     expect(apiMocks.advancedSearch).toHaveBeenCalledTimes(1)
-    expect(apiMocks.advancedSearch).toHaveBeenCalledWith({
-      title: 'Primal Hunter, Vol. 7',
-      author: 'Zogarth',
-      region: 'fr',
-      cap: 8,
-    })
+    expect(apiMocks.advancedSearch).toHaveBeenCalledWith(
+      {
+        title: 'Primal Hunter, Vol. 7',
+        author: 'Zogarth',
+        region: 'fr',
+        cap: 8,
+      },
+      expect.any(AbortSignal),
+    )
   })
 
   it("offers every region: the book's current one, then the configured one and US, then the rest alphabetically", async () => {
@@ -396,12 +411,15 @@ describe('RepairBooksModal', () => {
     await row(wrapper).get('[data-testid="record-search"]').trigger('click')
     await flushPromises()
 
-    expect(apiMocks.advancedSearch).toHaveBeenLastCalledWith({
-      title: 'Primal Hunter 4',
-      author: 'Zogarth',
-      region: 'de',
-      cap: 8,
-    })
+    expect(apiMocks.advancedSearch).toHaveBeenLastCalledWith(
+      {
+        title: 'Primal Hunter 4',
+        author: 'Zogarth',
+        region: 'de',
+        cap: 8,
+      },
+      expect.any(AbortSignal),
+    )
   })
 
   it('only rescans when the ASIN and region are unchanged', async () => {

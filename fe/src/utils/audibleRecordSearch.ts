@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
+import { toRaw } from 'vue'
 import { apiService } from '@/services/api'
 import type { SearchResult } from '@/types'
 import { extractNarrators, type NormalizedResult } from '@/utils/searchResultHelpers'
@@ -39,7 +40,8 @@ export interface RecordSearchState {
   asinCleared: boolean
   lookingUp: boolean
   asinNotFound: boolean
-  lookupId: number
+  // Bumped by each search or ASIN lookup: only the latest one may update the state
+  requestId: number
   searching: boolean
   searched: boolean
   results: SearchResult[]
@@ -60,7 +62,7 @@ export function createRecordSearchState(init: {
     asinCleared: false,
     lookingUp: false,
     asinNotFound: false,
-    lookupId: 0,
+    requestId: 0,
     searching: false,
     searched: false,
     results: [],
@@ -114,10 +116,17 @@ export function recordSearchParams(
 // The one Audible search behind Add New, Find Match and Repair, in one region only. The server drops
 // empty records (an ASIN, no title), tags each result with its region and looks a title that is an
 // ASIN up as one.
-export async function findRecords(query: RecordQuery, region: string): Promise<SearchResult[]> {
+export async function findRecords(
+  query: RecordQuery,
+  region: string,
+  signal?: AbortSignal,
+): Promise<SearchResult[]> {
   const params = recordSearchParams(query, region)
   if (!params) return []
-  return (await apiService.advancedSearch(params)) ?? []
+  const results = signal
+    ? await apiService.advancedSearch(params, signal)
+    : await apiService.advancedSearch(params)
+  return results ?? []
 }
 
 export function firstAuthor(result: SearchResult): string {
@@ -155,9 +164,28 @@ export function isChosen(state: RecordSearchState): boolean {
   return Boolean(state.chosen && state.chosen.asin === asin && state.chosen.region === state.region)
 }
 
-function cancelLookup(state: RecordSearchState) {
-  ++state.lookupId
+const inFlight = new WeakMap<RecordSearchState, AbortController>()
+
+// Starts a search or an ASIN lookup: the one in flight is aborted and its answer ignored, so a slow
+// response for another query or region never replaces the current results
+function startRequest(state: RecordSearchState): { id: number; signal: AbortSignal } {
+  const key = toRaw(state)
+  inFlight.get(key)?.abort()
+  const controller = new AbortController()
+  inFlight.set(key, controller)
+  state.searching = false
   state.lookingUp = false
+  // Results of the previous query or region can't be picked while this one runs
+  state.results = []
+  return { id: ++state.requestId, signal: controller.signal }
+}
+
+function cancelLookup(state: RecordSearchState) {
+  if (state.lookingUp) {
+    inFlight.get(toRaw(state))?.abort()
+    ++state.requestId
+    state.lookingUp = false
+  }
   state.asinNotFound = false
 }
 
@@ -166,15 +194,18 @@ function cancelLookup(state: RecordSearchState) {
 export async function searchRecords(state: RecordSearchState) {
   const term = state.query.trim()
   if (!term) return
+  const { id, signal } = startRequest(state)
   state.searching = true
+  let results: SearchResult[] = []
   try {
-    state.results = await findRecords({ title: term, author: state.author }, state.region)
+    results = await findRecords({ title: term, author: state.author }, state.region, signal)
   } catch {
-    state.results = []
-  } finally {
-    state.searching = false
-    state.searched = true
+    results = []
   }
+  if (id !== state.requestId) return
+  state.results = results
+  state.searching = false
+  state.searched = true
 }
 
 // Look the ASIN up in the selected region. When the catalogue has it, the title and author show
@@ -182,18 +213,18 @@ export async function searchRecords(state: RecordSearchState) {
 export async function lookupAsin(state: RecordSearchState): Promise<SearchResult | null> {
   const asin = state.asin.trim().toUpperCase()
   const region = state.region
-  const id = ++state.lookupId
+  const { id, signal } = startRequest(state)
   state.chosen = null
   state.asinNotFound = false
   state.asinCleared = false
   state.lookingUp = true
   let found: SearchResult[] = []
   try {
-    found = await findRecords({ asin }, region)
+    found = await findRecords({ asin }, region, signal)
   } catch {
     found = []
   }
-  if (id !== state.lookupId) return null
+  if (id !== state.requestId) return null
   state.lookingUp = false
   state.searched = false
   const record = found.find((r) => (r.asin ?? '').toUpperCase() === asin)

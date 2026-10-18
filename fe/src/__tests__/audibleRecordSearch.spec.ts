@@ -20,7 +20,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const advancedSearch = vi.hoisted(() => vi.fn())
 vi.mock('@/services/api', () => ({ apiService: { advancedSearch } }))
 
-import { findRecords } from '@/utils/audibleRecordSearch'
+import { reactive } from 'vue'
+import {
+  createRecordSearchState,
+  findRecords,
+  lookupAsin,
+  onRegionChanged,
+  searchRecords,
+} from '@/utils/audibleRecordSearch'
+import type { SearchResult } from '@/types'
 
 describe('findRecords', () => {
   beforeEach(() => {
@@ -55,5 +63,75 @@ describe('findRecords', () => {
   it('searches nothing for an empty query', async () => {
     expect(await findRecords({ title: '  ' }, 'fr')).toEqual([])
     expect(advancedSearch).not.toHaveBeenCalled()
+  })
+})
+
+describe('one search at a time', () => {
+  // Each request waits until the test answers it, keyed by region
+  let pending: Record<string, (results: SearchResult[]) => void>
+  let signals: Record<string, AbortSignal | undefined>
+
+  beforeEach(() => {
+    advancedSearch.mockReset()
+    pending = {}
+    signals = {}
+    advancedSearch.mockImplementation(
+      (params: { region: string }, signal?: AbortSignal) =>
+        new Promise<SearchResult[]>((resolve) => {
+          pending[params.region] = resolve
+          signals[params.region] = signal
+        }),
+    )
+  })
+
+  const book = (asin: string, title: string, region: string) =>
+    ({ asin, title, authors: [{ name: 'Zogarth' }], region }) as unknown as SearchResult
+
+  it('keeps the results of the region picked last when the earlier search answers after it', async () => {
+    const state = reactive(
+      createRecordSearchState({ region: 'fr', query: 'Primal Hunter 4', author: 'Zogarth' }),
+    )
+    const fr = searchRecords(state)
+    state.region = 'us'
+    const us = onRegionChanged(state)
+    expect(signals.fr?.aborted).toBe(true)
+
+    pending.us!([book('B0BK9W82PQ', 'Primal Hunter 4', 'us')])
+    await us
+    pending.fr!([book('B0HM45F8MW', 'Primal Hunter, Vol. 7', 'fr')])
+    await fr
+
+    expect(state.results.map((r) => r.asin)).toEqual(['B0BK9W82PQ'])
+    expect(state.searching).toBe(false)
+    expect(state.searched).toBe(true)
+  })
+
+  it('does not let a title search answering late replace the ASIN looked up since', async () => {
+    const state = reactive(createRecordSearchState({ region: 'fr', query: 'Primal Hunter' }))
+    const search = searchRecords(state)
+    const searchAnswer = pending.fr!
+    state.asin = 'B0HM45F8MW'
+    const lookup = lookupAsin(state)
+
+    pending.fr!([book('B0HM45F8MW', 'Primal Hunter, Vol. 7', 'fr')])
+    await lookup
+    searchAnswer([book('B0FXXVV42J', 'Primal Hunter, Tome 4', 'fr')])
+    await search
+
+    expect(state.results.map((r) => r.asin)).toEqual(['B0HM45F8MW'])
+    expect(state.chosen).toEqual({ asin: 'B0HM45F8MW', region: 'fr' })
+  })
+
+  it('does not offer the previous results while a new search runs', async () => {
+    const state = reactive(createRecordSearchState({ region: 'fr', query: 'Primal Hunter 4' }))
+    const first = searchRecords(state)
+    pending.fr!([book('B0HM45F8MW', 'Primal Hunter, Vol. 7', 'fr')])
+    await first
+    expect(state.results).toHaveLength(1)
+
+    void searchRecords(state)
+
+    expect(state.results).toEqual([])
+    expect(state.searching).toBe(true)
   })
 })
