@@ -392,8 +392,9 @@ onBeforeUnmount(() => {
   color: #2ecc71;
 }
 
-/* Same height as a book row, its text centered */
-.issues-row-empty {
+/* Same height as a book row, its text centered (not the book grid, whose narrow columns would wrap
+   it word by word) */
+.issues-row.issues-row-empty {
   display: flex;
   justify-content: center;
   align-items: center;
