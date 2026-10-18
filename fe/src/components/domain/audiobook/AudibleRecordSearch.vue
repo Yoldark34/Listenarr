@@ -134,6 +134,9 @@
           <span class="record-result-text">
             <span class="record-result-title">{{ resultTitle(result) }}</span>
             <span class="record-result-meta">{{ resultMeta(result) }}</span>
+            <span v-if="resultNarrators(result)" class="record-result-meta result-narrator">
+              Narrated by {{ resultNarrators(result) }}
+            </span>
           </span>
         </button>
       </li>
@@ -153,6 +156,7 @@ import {
   onTitleOrAuthorEdited,
   pickRecord,
   resultMeta,
+  resultNarrators,
   resultTitle,
   searchRecords,
   type RecordSearchState,
@@ -319,6 +323,12 @@ onMounted(() => {
 .record-result-meta {
   font-size: 0.75rem;
   opacity: 0.75;
+}
+
+.result-narrator {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 @media (max-width: 720px) {
