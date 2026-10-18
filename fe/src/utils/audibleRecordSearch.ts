@@ -17,6 +17,7 @@
  */
 import { apiService } from '@/services/api'
 import type { SearchResult } from '@/types'
+import { extractNarrators, type NormalizedResult } from '@/utils/searchResultHelpers'
 
 // Finding a book's Audible record in one region, shared by Find Match (Library Import) and Repair:
 // search by title and author, or type an ASIN, which is looked up in the selected region.
@@ -128,24 +129,19 @@ export function resultTitle(result: SearchResult): string {
   return [result.title, result.subtitle].filter(Boolean).join(': ')
 }
 
+export function resultNarrators(result: SearchResult): string {
+  return extractNarrators(result as unknown as NormalizedResult)
+}
+
 export function resultMeta(result: SearchResult): string {
   const names = (list?: Array<{ name?: string } | string>) =>
     (list ?? []).map((x) => (typeof x === 'string' ? x : x?.name)).filter(Boolean)
   const authors = names(result.authors as Array<{ name?: string } | string>)
-  const narrators = names(result.narrators as Array<{ name?: string } | string>)
   const seriesRaw = result.series as unknown
   const series = Array.isArray(seriesRaw)
     ? (seriesRaw as Array<{ name?: string }>)[0]?.name
     : (seriesRaw as string | undefined)
-  return [
-    authors.join(', '),
-    narrators.length ? `read by ${narrators.join(', ')}` : '',
-    series,
-    result.language,
-    result.asin,
-  ]
-    .filter(Boolean)
-    .join(' · ')
+  return [authors.join(', '), series, result.language, result.asin].filter(Boolean).join(' · ')
 }
 
 export function asinMalformed(state: RecordSearchState): boolean {

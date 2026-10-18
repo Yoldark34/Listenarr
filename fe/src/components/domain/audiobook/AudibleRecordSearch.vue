@@ -134,8 +134,8 @@
           <span class="record-result-text">
             <span class="record-result-title">{{ resultTitle(result) }}</span>
             <span class="record-result-meta">{{ resultMeta(result) }}</span>
-            <span v-if="extractNarrators(result)" class="record-result-meta result-narrator">
-              Narrated by {{ extractNarrators(result) }}
+            <span v-if="resultNarrators(result)" class="record-result-meta result-narrator">
+              Narrated by {{ resultNarrators(result) }}
             </span>
           </span>
         </button>
@@ -156,13 +156,13 @@ import {
   onTitleOrAuthorEdited,
   pickRecord,
   resultMeta,
+  resultNarrators,
   resultTitle,
   searchRecords,
   type RecordSearchState,
 } from '@/utils/audibleRecordSearch'
 import { searchRegionOptions } from '@/utils/languageMapping'
 import { getPlaceholderUrl } from '@/utils/placeholder'
-import { extractNarrators } from '@/utils/searchResultHelpers'
 import type { SearchResult } from '@/types'
 
 const props = withDefaults(
