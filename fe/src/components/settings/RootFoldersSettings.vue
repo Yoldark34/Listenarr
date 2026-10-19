@@ -341,6 +341,12 @@
 
     <RootFolderFormModal v-if="showForm" :root="editingRoot" @close="close" @saved="onSaved" />
 
+    <UnmatchedFilesModal
+      :is-open="showUnmatchedModal"
+      :root-folder="scanningFolder"
+      @close="showUnmatchedModal = false"
+    />
+
     <!-- Delete Root Folder Confirmation (shared) -->
     <DeleteConfirmationModal
       :visible="!!folderToDelete"
@@ -436,11 +442,11 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import { useRootFoldersStore } from '@/stores/rootFolders'
 import { useFilesystemReadinessStore } from '@/stores/filesystemReadiness'
 import RootFolderFormModal from '@/components/settings/RootFolderFormModal.vue'
 import DeleteConfirmationModal from '@/components/feedback/DeleteConfirmationModal.vue'
+import UnmatchedFilesModal from '@/components/feedback/UnmatchedFilesModal.vue'
 import { useToast } from '@/services/toastService'
 import { errorTracking } from '@/services/errorTracking'
 import { apiService } from '@/services/api'
@@ -478,6 +484,8 @@ const store = useRootFoldersStore()
 const filesystemReadinessStore = useFilesystemReadinessStore()
 const showForm = ref(false)
 const editing = ref<{ id?: number; name: string; path: string } | null>(null)
+const showUnmatchedModal = ref(false)
+const scanningFolder = ref<RootFolder | null>(null)
 const editingRoot = computed(() => editing.value as RootFolder | undefined)
 const toast = useToast()
 const retryingRelocationId = ref<string | null>(null)
@@ -536,11 +544,9 @@ function openAdd() {
   showForm.value = true
 }
 
-const router = useRouter()
-
-// Unmatched files are matched and imported in Library Import: open it on this folder and scan it there
 function scanUnmatched(folder: RootFolder) {
-  void router.push({ name: 'library-import', query: { rootFolder: String(folder.id), scan: '1' } })
+  scanningFolder.value = folder
+  showUnmatchedModal.value = true
 }
 
 function edit(r: { id?: number; name: string; path: string }) {

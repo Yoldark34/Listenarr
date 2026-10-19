@@ -44,8 +44,11 @@ public class SqliteMigrationSchemaTests : BaseTests
         "20260825021432_AddWeakStorageVerifiedCleanup";
     private const string OperationEvidencePublicationsMigrationId =
         "20261002210137_AddOperationEvidencePublications";
+    // Added by the Repair PR, then dropped when that PR was reverted (rollback)
     private const string AudiobookIssueIgnoresMigrationId =
         "20261015090055_AddAudiobookIssueIgnores";
+    private const string DropAudiobookIssueIgnoresMigrationId =
+        "20261015091816_DropAudiobookIssueIgnores";
 
     private static (SqliteConnection Connection, ListenArrDbContext Context)
         CreateMigratedSqliteContext()
@@ -229,10 +232,13 @@ public class SqliteMigrationSchemaTests : BaseTests
                 CompatibilityFilePublicationMigrationId,
                 WeakStorageVerifiedCleanupMigrationId,
                 OperationEvidencePublicationsMigrationId,
-                AudiobookIssueIgnoresMigrationId
+                AudiobookIssueIgnoresMigrationId,
+                DropAudiobookIssueIgnoresMigrationId
             ],
             postCanary);
         Assert.Contains("20251124102000_AddMoveJobSourcePath", applied);
+        // The table of the reverted Repair PR is gone after the drop migration
+        Assert.False(await TableExistsAsync(connection, "AudiobookIssueIgnores"));
     }
 
     [Fact]
