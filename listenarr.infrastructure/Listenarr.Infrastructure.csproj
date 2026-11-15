@@ -33,4 +33,9 @@
     <InternalsVisibleTo Include="Listenarr.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="DependencyInjection\Metadata\Fixtures\B008DFUGCQ.json"
+                      LogicalName="Listenarr.Infrastructure.AudibleFixtures.B008DFUGCQ.json" />
+  </ItemGroup>
+
 </Project>
