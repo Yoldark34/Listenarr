@@ -107,6 +107,7 @@
         <button
           v-if="audiobooks.length > 0 && selectedCount === 0"
           class="toolbar-btn"
+          data-testid="select-all-audiobooks"
           @click="libraryStore.selectAll()"
         >
           <PhCheckSquare />
