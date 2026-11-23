@@ -1,0 +1,9 @@
+{
+  "product": {
+    "asin": "B0BARSOOMS",
+    "title": "Barsoom",
+    "relationships": [
+      { "asin": "B0GODSMARS", "sequence": "2", "relationship_to_product": "child", "relationship_type": "series" }
+    ]
+  }
+}

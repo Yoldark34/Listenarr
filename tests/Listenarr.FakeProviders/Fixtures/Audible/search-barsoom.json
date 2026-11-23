@@ -1,0 +1,11 @@
+{
+  "products": [
+    {
+      "asin": "B0GODSMARS",
+      "title": "The Gods of Mars",
+      "language": "english",
+      "authors": [{ "name": "Edgar Rice Burroughs" }],
+      "series": [{ "asin": "B0BARSOOMS", "title": "Barsoom", "sequence": "2" }]
+    }
+  ]
+}
