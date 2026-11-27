@@ -397,6 +397,194 @@ namespace Listenarr.Tests.Features.Application.Audiobooks.Monitoring
                 Times.Once);
         }
 
+        // Issue #1235: a monitored author's sync adds its whole back catalogue as monitored,
+        // re-adds books the library already holds, and adds every edition of the same book.
+        // Titles, ASINs and release dates are Audible UK's (api.audible.co.uk, Nov 2026).
+
+        [Fact]
+        public async Task SyncAuthorAsync_AddsTheWholeBackCatalogueAsMonitoredBooks()
+        {
+            // What the issue reports, pinned: every catalogue book, however old, is added as a
+            // monitored (wanted) book, so the automatic search picks each one up. Nothing in
+            // MonitorAuthorRequest lets the user add them unmonitored or keep future releases only.
+            var sync = await SyncMonitoredAuthorAsync(
+                library: new List<Audiobook>(),
+                catalog: new List<AudibleSearchResult>
+                {
+                    RowlingBook("B017V568SY", "Harry Potter and the Philosopher's Stone, Book 1", "2015-11-20"),
+                    RowlingBook("B017V4IM1G", "Harry Potter and the Chamber of Secrets, Book 2", "2015-11-20"),
+                    RowlingBook("B0F14RFHS6", "Harry Potter and the Philosopher’s Stone (Full-Cast Edition)", "2025-11-04")
+                });
+
+            Assert.True(sync.Result.Succeeded);
+            Assert.Equal(3, sync.Result.AddedCount);
+            Assert.All(sync.Requests, request =>
+            {
+                Assert.True(request.Monitored);
+                Assert.Equal(1, request.QualityProfileId);
+            });
+        }
+
+        [Fact]
+        public async Task SyncAuthorAsync_SkipsAnOwnedBookWithTheSameAsinInAnotherRootFolder()
+        {
+            var sync = await SyncMonitoredAuthorAsync(
+                library: new List<Audiobook>
+                {
+                    OwnedBook("Harry Potter and the Philosopher's Stone, Book 1", "J.K. Rowling", asin: "B017V568SY")
+                },
+                catalog: new List<AudibleSearchResult>
+                {
+                    RowlingBook("B017V568SY", "Harry Potter and the Philosopher's Stone, Book 1", "2015-11-20")
+                });
+
+            Assert.Equal(0, sync.Result.AddedCount);
+            Assert.Equal(1, sync.Result.ExistingCount);
+            Assert.Empty(sync.Requests);
+        }
+
+        [Fact]
+        public async Task SyncAuthorAsync_DoesNotReAddAnOwnedBookWhoseTitleHasNoBookNumberSuffix()
+        {
+            // An owned book imported from disk without an ASIN carries the title of its files or
+            // folder; Audible's catalogue title adds ", Book 1".
+            var sync = await SyncMonitoredAuthorAsync(
+                library: new List<Audiobook>
+                {
+                    OwnedBook("Harry Potter and the Philosopher's Stone", "J.K. Rowling", asin: null)
+                },
+                catalog: new List<AudibleSearchResult>
+                {
+                    RowlingBook("B017V568SY", "Harry Potter and the Philosopher's Stone, Book 1", "2015-11-20")
+                });
+
+            Assert.Equal(1, sync.Result.ExistingCount);
+            Assert.Equal(0, sync.Result.AddedCount);
+            Assert.Empty(sync.Requests);
+        }
+
+        [Fact]
+        public async Task SyncAuthorAsync_DoesNotReAddAnOwnedBookWhoseAuthorInitialsAreSpaced()
+        {
+            // "J. K. Rowling" (tags, OpenLibrary) and "J.K. Rowling" (Audible) are the same author.
+            var sync = await SyncMonitoredAuthorAsync(
+                library: new List<Audiobook>
+                {
+                    OwnedBook("Harry Potter and the Philosopher's Stone, Book 1", "J. K. Rowling", asin: null)
+                },
+                catalog: new List<AudibleSearchResult>
+                {
+                    RowlingBook("B017V568SY", "Harry Potter and the Philosopher's Stone, Book 1", "2015-11-20")
+                });
+
+            Assert.Equal(1, sync.Result.ExistingCount);
+            Assert.Equal(0, sync.Result.AddedCount);
+            Assert.Empty(sync.Requests);
+        }
+
+        [Fact]
+        public async Task SyncAuthorAsync_AddsOnlyOneEditionOfTheSameBook()
+        {
+            // Audible UK lists the Stephen Fry and the full-cast recordings as two products.
+            var sync = await SyncMonitoredAuthorAsync(
+                library: new List<Audiobook>(),
+                catalog: new List<AudibleSearchResult>
+                {
+                    RowlingBook("B017V568SY", "Harry Potter and the Philosopher's Stone, Book 1", "2015-11-20", "Stephen Fry"),
+                    RowlingBook("B0F14RFHS6", "Harry Potter and the Philosopher’s Stone (Full-Cast Edition)", "2025-11-04", "Hugh Laurie")
+                });
+
+            Assert.Equal(1, sync.Result.AddedCount);
+            Assert.Single(sync.Requests);
+        }
+
+        private sealed record AuthorSync(MonitorAuthorSyncResult Result, List<LibraryAddOperationRequest> Requests);
+
+        private static AudibleSearchResult RowlingBook(string asin, string title, string releaseDate, string narrator = "Stephen Fry")
+        {
+            var book = new AudibleSearchResultBuilder()
+                .WithAsin(asin)
+                .WithTitle(title)
+                .WithAuthor("J.K. Rowling")
+                .WithLanguage("english")
+                .Build();
+            book.ReleaseDate = releaseDate;
+            book.Narrators = new List<AudibleNarrator> { new() { Name = narrator } };
+            return book;
+        }
+
+        private static Audiobook OwnedBook(string title, string author, string? asin) => new()
+        {
+            Title = title,
+            Authors = new List<string> { author },
+            Asin = asin,
+            Language = "english",
+            Monitored = false,
+            BasePath = "/audiobooks-owned/" + title
+        };
+
+        private static async Task<AuthorSync> SyncMonitoredAuthorAsync(List<Audiobook> library, List<AudibleSearchResult> catalog)
+        {
+            var dbOptions = new DbContextOptionsBuilder<ListenArrDbContext>()
+                .UseInMemoryDatabase(databaseName: $"author-monitor-1235-{System.Guid.NewGuid():N}")
+                .Options;
+
+            await using var dbContext = new ListenArrDbContext(dbOptions);
+            dbContext.Audiobooks.AddRange(library);
+            dbContext.MonitoredAuthors.Add(new MonitoredAuthor
+            {
+                Id = 1,
+                AuthorName = "J.K. Rowling",
+                AuthorNameNormalized = "jk rowling",
+                Region = "uk",
+                Language = "english",
+                QualityProfileId = 1
+            });
+            await dbContext.SaveChangesAsync();
+
+            var authorCatalogService = new Mock<IAuthorCatalogService>();
+            authorCatalogService
+                .Setup(service => service.GetCatalogAsync("J.K. Rowling", "uk", 500, null, true, It.IsAny<System.Threading.CancellationToken>()))
+                .ReturnsAsync(new AuthorCatalogFetchResult
+                {
+                    Author = new AuthorLookupItem { Asin = "B000AP9A6K", Name = "J.K. Rowling" },
+                    Books = catalog
+                });
+
+            var requests = new List<LibraryAddOperationRequest>();
+            var libraryAddService = new Mock<ILibraryAddService>();
+            libraryAddService
+                .Setup(service => service.AddToLibraryAsync(It.IsAny<LibraryAddOperationRequest>(), It.IsAny<System.Threading.CancellationToken>()))
+                .ReturnsAsync((LibraryAddOperationRequest request, System.Threading.CancellationToken _) =>
+                {
+                    requests.Add(request);
+                    return new LibraryAddOperationResult
+                    {
+                        Added = true,
+                        Message = "Audiobook added to library successfully",
+                        Audiobook = new Audiobook
+                        {
+                            Id = 100 + requests.Count,
+                            Title = request.Metadata.Title,
+                            Authors = request.Metadata.Authors,
+                            Asin = request.Metadata.Asin,
+                            Monitored = request.Monitored
+                        }
+                    };
+                });
+
+            var service = new AuthorMonitoringService(
+                new EfMonitoredAuthorRepository(dbContext),
+                new AudiobookRepository(dbContext),
+                authorCatalogService.Object,
+                libraryAddService.Object,
+                CreateQualityProfileService(),
+                Mock.Of<ILogger<AuthorMonitoringService>>());
+
+            var result = await service.SyncAuthorAsync(1);
+            return new AuthorSync(result, requests);
+        }
+
         private static IQualityProfileService CreateQualityProfileService(QualityProfile? defaultProfile = null)
         {
             defaultProfile ??= new QualityProfile { Id = 1, Name = "Standard", IsDefault = true };
